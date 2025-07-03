@@ -1,92 +1,76 @@
 import streamlit as st
 import matplotlib.pyplot as plt
+import pandas as pd
 import numpy as np
 import time
 import matplotlib.dates as mdates
-import pandas as pd
+
+st.set_page_config(page_title="Predicción de Fallas en Trenes", layout="wide")
+
+# Título principal
+st.title("🔧 Monitoreo en Tiempo Real de Probabilidad de Falla")
+st.subheader(
+    "Sistema de Predicción Preventiva (Ventana móvil de 5 minutos hacia adelante)"
+)
+st.caption("Frecuencia de muestreo: 1 Hz | Umbral crítico: 0.9")
+
+# Variables simuladas
+x_data = []
+y_data = []
+alerta_activada = st.session_state.get("alerta_activada", False)
+
+# Crear el contenedor para el gráfico
+grafico = st.empty()
+
+# Botón para reanudar después de alerta
+if alerta_activada:
+    if st.button("✅ Ya se revisó el sistema, continuar monitoreo"):
+        st.session_state.alerta_activada = False
+        alerta_activada = False
 
 
-# Simulación de los datos de probabilidad de falla (debe ser reemplazada por el modelo real)
-def generar_datos_en_vivo():
-    # Simulamos una probabilidad de falla entre 0 y 1
-    probabilidad_falla = np.random.rand()  # Simulamos probabilidades entre 0 y 1
-    tiempo_actual = pd.to_datetime("now")  # Obtenemos el tiempo actual
-    return tiempo_actual, probabilidad_falla
+# Simulador de datos reales
+def generar_dato():
+    tiempo_actual = pd.to_datetime("now")
+    # Simular un patrón creciente con algo de ruido
+    base = len(x_data) / 200
+    probabilidad = np.clip(0.4 + 0.6 * np.sin(base) + np.random.normal(0, 0.05), 0, 1)
+    return tiempo_actual, probabilidad
 
 
-# Inicializar la interfaz de Streamlit
-st.title("Monitoreo en Vivo de Probabilidad de Falla")
-
-# Configuración del gráfico
-fig, ax = plt.subplots(figsize=(12, 6))
-ax.set_title("Probabilidad de Falla en Tiempo Real")
-ax.set_xlabel("Tiempo")
-ax.set_ylabel("Probabilidad de Falla")
-ax.axhline(y=0.7, color="r", linestyle="--", label="Umbral (0.7)")  # Umbral de alerta
-
-# Lista para almacenar los datos
-x_data = []  # Lista de tiempos
-y_data = []  # Lista de probabilidades
-
-# Variable de umbral
-umbral = 0.90
-
-# Crear el gráfico inicial
-ax.set_xlim(
-    pd.to_datetime("now") - pd.Timedelta(minutes=5),
-    pd.to_datetime("now") + pd.Timedelta(minutes=1),
-)  # Últimos 5 minutos de datos
-
-
-# Función para actualizar el gráfico en tiempo real
-def actualizar_grafico():
-    global x_data, y_data
-
-    for _ in range(100):  # Esto simula 100 iteraciones de datos en vivo
-        # Generar un nuevo dato de probabilidad de falla
-        tiempo, probabilidad = generar_datos_en_vivo()
-
-        # Agregar los nuevos datos al gráfico
+# Loop principal solo si no hay alerta
+if not alerta_activada:
+    for _ in range(300):  # Cambiar a 3600 para simular una hora entera
+        tiempo, prob = generar_dato()
         x_data.append(tiempo)
-        y_data.append(probabilidad)
+        y_data.append(prob)
 
-        # Limitar el gráfico a los últimos 5 minutos
-        if (
-            len(x_data) > 10
-        ):  # Mostrar solo los últimos 10 puntos (equivalente a 5 minutos)
-            x_data = x_data[1:]
-            y_data = y_data[1:]
+        if prob > 0.9:
+            st.session_state.alerta_activada = True
+            st.error("⚠️ ALERTA: CHEQUEAR SISTEMA", icon="🚨")
+            break
 
-        # Limpiar el gráfico anterior y graficar los datos actualizados
-        ax.clear()
-        ax.plot(x_data, y_data, label="Probabilidad de Falla", color="b")
-
-        # Añadir la línea de umbral
-        ax.axhline(y=umbral, color="r", linestyle="--", label="Umbral (0.90)")
-
-        # Mejorar la visualización
-        ax.set_title("Probabilidad de Falla en Tiempo Real")
-        ax.set_xlabel("Tiempo")
-        ax.set_ylabel("Probabilidad de Falla")
+        fig, ax = plt.subplots(figsize=(14, 6))
+        ax.plot(
+            x_data, y_data, label="Probabilidad de Falla", color="blue", linewidth=2
+        )
+        ax.axhline(
+            y=0.9,
+            color="red",
+            linestyle="--",
+            linewidth=1.5,
+            label="Umbral crítico (0.9)",
+        )
+        ax.set_ylabel("Probabilidad", fontsize=12)
+        ax.set_xlabel("Tiempo", fontsize=12)
+        ax.set_title("Probabilidad de Falla a Futuro (Próximos 5 minutos)", fontsize=14)
+        ax.set_ylim([0, 1.05])
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M:%S"))
         ax.legend()
+        ax.grid(True)
 
-        # Formato de las fechas en el eje X
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d %H:%M:%S"))
-
-        # Ajustar la visualización
         plt.xticks(rotation=45)
         plt.tight_layout()
 
-        # Mostrar el gráfico en Streamlit
-        st.pyplot(fig)
-
-        # Alerta si la probabilidad de falla supera el umbral
-        if probabilidad > umbral:
-            st.warning("¡Alerta! Se predice una posible falla.")
-
-        # Pausa para simular la llegada de nuevos datos (1 segundo)
-        time.sleep(1)  # Actualización cada 1 segundo
-
-
-# Llamar la función para actualizar el gráfico en vivo
-actualizar_grafico()
+        grafico.pyplot(fig)
+        time.sleep(1)
