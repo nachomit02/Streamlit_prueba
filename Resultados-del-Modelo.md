@@ -22,4 +22,4 @@ Este enfoque reduce los falsos negativos a costa de algunos falsos positivos, lo
 
 La demostración en vivo está disponible en Streamlit Cloud:
 
-[Ir a la app de predicción de fallas](https://appprueba-a6kwkxrc2qurqljmnrwrns.streamlit.app/)
+[Ir a la app de predicción de fallas](https://metro-tp-lab1-dh55rkcuynltqwuycsnpg4.streamlit.app/)
