@@ -1,4 +1,4 @@
-### 📌 Decisiones tomadas en el desarrollo del modelo de predicción de fallas
+### Decisiones tomadas en el desarrollo del modelo de predicción de fallas
 
 ---
 
