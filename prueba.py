@@ -14,7 +14,7 @@ pausa = 0.5  # segundos entre actualizaciones
 # --- CARGA DE MODELO Y DATOS ---
 modelo = joblib.load("modelo.pkl")
 features = joblib.load("features.pkl")
-data = pd.read_csv("metro_dataset.csv").drop(columns=["Unnamed: 0"])
+data = pd.read_csv("metro_dataset.csv.gz").drop(columns=["Unnamed: 0"])
 data["timestamp"] = pd.to_datetime(data["timestamp"])
 
 
