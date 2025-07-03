@@ -1,16 +1,63 @@
 # Monitoreo Predictivo de Falla en Compresores de Trenes
 
-Este proyecto corresponde a una simulación de consultoría realizada en el marco de la materia **Laboratorio de Datos con IA**. El objetivo fue desarrollar una solución que permita **anticipar fallas** en el sistema de compresión neumática de un tren, utilizando datos reales del dataset MetroPT3.
+Proyecto desarrollado como simulación de consultoría en el marco de la materia **Laboratorio de Datos con IA**. Utiliza datos reales del dataset MetroPT3 para construir un sistema de predicción de fallas en el sistema de compresión de un tren.
 
 ---
 
-## Objetivo del Proyecto
+## Objetivo
 
-Construir un modelo de machine learning que detecte patrones previos a una falla, y luego **visualizar en tiempo real** la probabilidad de que una falla ocurra en los próximos minutos. La solución incluye:
+El sistema busca **anticipar fallas** en los compresores neumáticos de un tren mediante el análisis de sensores en tiempo real. Para ello:
 
-- Procesamiento de series temporales sensoriales
-- Modelado con Random Forest
-- Simulación de predicción en vivo mediante **Streamlit**
-- Identificación visual de alertas de falla
+- Se construyó un modelo de machine learning entrenado con datos históricos etiquetados
+- Se aplicó una lógica de predicción sobre ventanas temporales
+- Se desarrolló una interfaz de monitoreo en vivo usando Streamlit
 
 ---
+
+## Stakeholders simulados
+
+- **Operadores ferroviarios**: necesitan conocer en tiempo real si un tren está en riesgo de falla.
+- **Ingenieros de mantenimiento**: usan el sistema para activar intervenciones preventivas.
+- **Área de operaciones**: puede tomar decisiones logísticas a partir del riesgo estimado.
+
+---
+
+## Modelo implementado
+
+- Algoritmo: `RandomForestClassifier` (modelo conservador)
+- Variables utilizadas:
+  - `DV_pressure` – Caída de presión al descargar
+  - `DV_pressure_var6` – Varianza móvil de DV_pressure
+  - `Oil_temperature`
+  - `TP2` – Presión en el compresor
+- Ingeniería de características con ventanas móviles
+- Entrenamiento sobre histórico etiquetado con variable `estado`
+- Umbral de alerta: `p > 0.6` para señal de riesgo
+
+---
+
+## Estructura del proyecto
+
+.
+├── README.md
+├── decisiones.md
+├── backlog_final.pdf
+├── requirements.txt
+│
+├── /data/
+│ └── metro_dataset.csv (versión reducida)
+│
+├── /notebooks/
+│ ├── modelado_randomforest.ipynb
+│ └── exploracion_sensores.ipynb
+│
+├── /src/
+│ └── prueba.py (script principal de Streamlit)
+│
+├── /models/
+│ ├── modelo.pkl
+│ ├── features.pkl
+│
+└── /docs/
+├── Data Description_Metro.pdf
+└── otros archivos informativos
