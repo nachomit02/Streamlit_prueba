@@ -134,6 +134,6 @@ def actualizar_grafico():
 x_data = []  # Lista de tiempos
 y_data = []  # Lista de probabilidades
 fig, ax = plt.subplots(figsize=(12, 6))
-umbral = 0.90  # Ya lo usás dentro de la función
+umbral = 0.60  # Ya lo usás dentro de la función
 
 actualizar_grafico()
