@@ -7,18 +7,16 @@ import matplotlib.dates as mdates
 import pandas as pd
 from datetime import datetime
 
-# --- PARÁMETROS ---
-umbral = 0.90
-pausa = 0.5  # segundos entre actualizaciones
+st.set_page_config(
+    page_title="Monitor de fallas del metro", layout="wide"
+)  # opcional: título de la pestaña y layout
+st.title("Monitor en tiempo real de fallas")
 
-# --- CARGA DE MODELO Y DATOS ---
+# Cargar modelo y features
 modelo = joblib.load("modelo.pkl")
 features = joblib.load("features.pkl")
-data = pd.read_csv("metro_dataset.csv.gz").drop(columns=["Unnamed: 0"])
-data["timestamp"] = pd.to_datetime(data["timestamp"])
 
 
-# --- FUNCIONES DE PROCESAMIENTO ---
 def estado(fecha):
     if isinstance(fecha, datetime):
         fallas = [
@@ -35,6 +33,20 @@ def estado(fecha):
         return 0
 
 
+def estandarizar(df):
+    nulos = df.isnull().values.any()
+    duplicados = df.duplicated().any()
+    if nulos == False:
+        print("No hay datos nulos en el dataset.")
+    else:
+        print("Revisar nulos por columna.")
+    if duplicados == False:
+        print("No hay filas duplicadas en el dataset.")
+    else:
+        print("Revisar duplicados.")
+    df["estado"] = df["timestamp"].apply(estado)
+
+
 def preparar_datos(df):
     df = df.copy()
     df["DV_pressure_ma6"] = df["DV_pressure"].rolling(window=6, min_periods=1).mean()
@@ -43,66 +55,85 @@ def preparar_datos(df):
     return df
 
 
-def predecir(df):
+def predecir(df, threshold=0.6):
     df_proc = preparar_datos(df)
     X = df_proc[features]
     probs = modelo.predict_proba(X)[:, 1]
+    pred = (probs >= threshold).astype(int)
     df_proc["probabilidad"] = probs
-    df_proc["prediccion"] = (probs >= umbral).astype(int)
+    df_proc["prediccion"] = pred
     return df_proc[["timestamp", "probabilidad", "prediccion"]]
 
 
-# --- STREAMLIT SETUP ---
-st.set_page_config(page_title="Sistema de Monitoreo de Falla", layout="wide")
-st.title("🧠 Monitoreo de Probabilidad de Falla en Compresor del Tren")
+# Cargar los datos
+data = pd.read_csv("metro_dataset.csv.gz")
+data = data.drop(columns=["Unnamed: 0"])
+data = preparar_datos(data)
+data["timestamp"] = pd.to_datetime(data["timestamp"])
+data = data[data["timestamp"] >= pd.Timestamp("2020-04-18 00:00:01")]
+prediccion = predecir(data)
+prediccion["timestamp"] = pd.to_datetime(prediccion["timestamp"])
+prediccion["estado"] = prediccion["timestamp"].apply(estado)
+prediccion = prediccion.set_index("timestamp")
 
-# --- DATOS Y PREDICCIONES ---
-df_pred = predecir(data)
-df_pred["estado"] = df_pred["timestamp"].apply(estado)
-df_pred = df_pred.set_index("timestamp")
+# Convertimos la serie en listas para simular en vivo
+timestamps = prediccion.index.to_list()
+probabilidades = prediccion["probabilidad"].to_list()
 
-# --- INICIALIZAR VISUALIZACIÓN ---
-x_data = []
-y_data = []
-alertas = []
 
-fig, ax = plt.subplots(figsize=(12, 6))
-grafico = st.pyplot(fig)
+def generar_datos_en_vivo_real(i):
+    if i < len(timestamps):
+        return timestamps[i], probabilidades[i]
+    else:
+        return None, None
 
-st.markdown("---")
 
-for i in range(len(df_pred)):
-    tiempo = df_pred.index[i]
-    prob = df_pred["probabilidad"].iloc[i]
+def actualizar_grafico():
+    global x_data, y_data
 
-    x_data.append(tiempo)
-    y_data.append(prob)
+    chart_placeholder = st.empty()
+    alerta_activa = False  # bandera para controlar el envío de alertas
 
-    # Mantener 100 puntos visibles
-    if len(x_data) > 100:
-        x_data = x_data[1:]
-        y_data = y_data[1:]
+    for i in range(len(timestamps)):
+        tiempo, probabilidad = generar_datos_en_vivo_real(i)
+        if tiempo is None:
+            break
 
-    # LIMPIAR y GRAFICAR
-    ax.clear()
-    ax.plot(x_data, y_data, label="Probabilidad de Falla", color="navy")
-    ax.axhline(y=umbral, color="red", linestyle="--", label="Umbral (0.90)")
+        x_data.append(tiempo)
+        y_data.append(probabilidad)
 
-    ax.set_title("Probabilidad Estimada de Falla (en tiempo real)")
-    ax.set_xlabel("Tiempo")
-    ax.set_ylabel("Probabilidad de Falla")
-    ax.legend(loc="upper left")
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M:%S"))
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    grafico.pyplot(fig)
+        if len(x_data) > 10:
+            x_data = x_data[1:]
+            y_data = y_data[1:]
 
-    # DETECTAR ALERTA
-    if prob >= umbral:
-        if tiempo not in alertas:
-            st.error(
-                f"🚨 Posible falla detectada a las {tiempo.time()} con probabilidad {prob:.2f}"
+        ax.clear()
+        ax.plot(x_data, y_data, label="Probabilidad de Falla", color="b")
+        ax.axhline(y=umbral, color="r", linestyle="--", label="Umbral (0.90)")
+        # ax.set_title("Probabilidad de Falla en Tiempo Real")
+        ax.set_xlabel("Tiempo")
+        ax.set_ylabel("Probabilidad de Falla")
+        ax.legend()
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d %H:%M:%S"))
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+
+        chart_placeholder.pyplot(fig)
+
+        # Control de alerta única
+        if probabilidad > umbral and not alerta_activa:
+            st.warning(
+                f"¡Alerta! Posible falla detectada a las {tiempo.strftime('%Y-%m-%d %H:%M:%S')}. Probabilidad: {probabilidad:.2f}"
             )
-            alertas.append(tiempo)
+            alerta_activa = True  # activa la bandera para no repetir la alerta
+        elif probabilidad <= umbral:
+            alerta_activa = False  # resetea la bandera cuando baja la probabilidad
 
-    time.sleep(pausa)
+        time.sleep(1)
+
+
+x_data = []  # Lista de tiempos
+y_data = []  # Lista de probabilidades
+fig, ax = plt.subplots(figsize=(12, 6))
+umbral = 0.90  # Ya lo usás dentro de la función
+
+actualizar_grafico()
