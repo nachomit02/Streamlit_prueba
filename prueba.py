@@ -108,7 +108,7 @@ def actualizar_grafico():
 
         ax.clear()
         ax.plot(x_data, y_data, label="Probabilidad de Falla", color="b")
-        ax.axhline(y=umbral, color="r", linestyle="--", label="Umbral (0.90)")
+        ax.axhline(y=umbral, color="r", linestyle="--", label="Umbral (0.60)")
         # ax.set_title("Probabilidad de Falla en Tiempo Real")
         ax.set_xlabel("Tiempo")
         ax.set_ylabel("Probabilidad de Falla")
