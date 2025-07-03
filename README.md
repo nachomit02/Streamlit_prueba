@@ -24,7 +24,7 @@ El sistema busca **anticipar fallas** en los compresores neumáticos de un tren 
 
 ## Modelo implementado
 
-- Algoritmo: `RandomForestClassifier` (modelo conservador)
+- Algoritmo: `RandomForestClassifier`
 - Variables utilizadas:
   - `DV_pressure` – Caída de presión al descargar
   - `DV_pressure_var6` – Varianza móvil de DV_pressure
@@ -33,31 +33,3 @@ El sistema busca **anticipar fallas** en los compresores neumáticos de un tren 
 - Ingeniería de características con ventanas móviles
 - Entrenamiento sobre histórico etiquetado con variable `estado`
 - Umbral de alerta: `p > 0.6` para señal de riesgo
-
----
-
-## Estructura del proyecto
-
-.
-├── README.md
-├── decisiones.md
-├── backlog_final.pdf
-├── requirements.txt
-│
-├── /data/
-│ └── metro_dataset.csv (versión reducida)
-│
-├── /notebooks/
-│ ├── modelado_randomforest.ipynb
-│ └── exploracion_sensores.ipynb
-│
-├── /src/
-│ └── prueba.py (script principal de Streamlit)
-│
-├── /models/
-│ ├── modelo.pkl
-│ ├── features.pkl
-│
-└── /docs/
-├── Data Description_Metro.pdf
-└── otros archivos informativos
