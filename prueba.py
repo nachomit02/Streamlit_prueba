@@ -1,76 +1,108 @@
 import streamlit as st
 import matplotlib.pyplot as plt
-import pandas as pd
 import numpy as np
 import time
+import joblib
 import matplotlib.dates as mdates
+import pandas as pd
+from datetime import datetime
 
-st.set_page_config(page_title="Predicción de Fallas en Trenes", layout="wide")
+# --- PARÁMETROS ---
+umbral = 0.90
+pausa = 0.5  # segundos entre actualizaciones
 
-# Título principal
-st.title("🔧 Monitoreo en Tiempo Real de Probabilidad de Falla")
-st.subheader(
-    "Sistema de Predicción Preventiva (Ventana móvil de 5 minutos hacia adelante)"
-)
-st.caption("Frecuencia de muestreo: 1 Hz | Umbral crítico: 0.9")
+# --- CARGA DE MODELO Y DATOS ---
+modelo = joblib.load("modelo.pkl")
+features = joblib.load("features.pkl")
+data = pd.read_csv("metro_dataset.csv").drop(columns=["Unnamed: 0"])
+data["timestamp"] = pd.to_datetime(data["timestamp"])
 
-# Variables simuladas
+
+# --- FUNCIONES DE PROCESAMIENTO ---
+def estado(fecha):
+    if isinstance(fecha, datetime):
+        fallas = [
+            (datetime(2020, 4, 18, 0, 0), datetime(2020, 4, 18, 23, 59)),
+            (datetime(2020, 5, 29, 23, 30), datetime(2020, 5, 30, 6, 0)),
+            (datetime(2020, 6, 5, 10, 0), datetime(2020, 6, 7, 14, 30)),
+            (datetime(2020, 7, 15, 14, 30), datetime(2020, 7, 15, 19, 0)),
+        ]
+        for inicio, fin in fallas:
+            if inicio <= fecha <= fin:
+                return 1
+        return 0
+    else:
+        return 0
+
+
+def preparar_datos(df):
+    df = df.copy()
+    df["DV_pressure_ma6"] = df["DV_pressure"].rolling(window=6, min_periods=1).mean()
+    df["DV_pressure_var6"] = df["DV_pressure"].rolling(window=6, min_periods=1).var()
+    df = df.dropna(subset=features)
+    return df
+
+
+def predecir(df):
+    df_proc = preparar_datos(df)
+    X = df_proc[features]
+    probs = modelo.predict_proba(X)[:, 1]
+    df_proc["probabilidad"] = probs
+    df_proc["prediccion"] = (probs >= umbral).astype(int)
+    return df_proc[["timestamp", "probabilidad", "prediccion"]]
+
+
+# --- STREAMLIT SETUP ---
+st.set_page_config(page_title="Sistema de Monitoreo de Falla", layout="wide")
+st.title("🧠 Monitoreo de Probabilidad de Falla en Compresor del Tren")
+
+# --- DATOS Y PREDICCIONES ---
+df_pred = predecir(data)
+df_pred["estado"] = df_pred["timestamp"].apply(estado)
+df_pred = df_pred.set_index("timestamp")
+
+# --- INICIALIZAR VISUALIZACIÓN ---
 x_data = []
 y_data = []
-alerta_activada = st.session_state.get("alerta_activada", False)
+alertas = []
 
-# Crear el contenedor para el gráfico
-grafico = st.empty()
+fig, ax = plt.subplots(figsize=(12, 6))
+grafico = st.pyplot(fig)
 
-# Botón para reanudar después de alerta
-if alerta_activada:
-    if st.button("✅ Ya se revisó el sistema, continuar monitoreo"):
-        st.session_state.alerta_activada = False
-        alerta_activada = False
+st.markdown("---")
 
+for i in range(len(df_pred)):
+    tiempo = df_pred.index[i]
+    prob = df_pred["probabilidad"].iloc[i]
 
-# Simulador de datos reales
-def generar_dato():
-    tiempo_actual = pd.to_datetime("now")
-    # Simular un patrón creciente con algo de ruido
-    base = len(x_data) / 200
-    probabilidad = np.clip(0.4 + 0.6 * np.sin(base) + np.random.normal(0, 0.05), 0, 1)
-    return tiempo_actual, probabilidad
+    x_data.append(tiempo)
+    y_data.append(prob)
 
+    # Mantener 100 puntos visibles
+    if len(x_data) > 100:
+        x_data = x_data[1:]
+        y_data = y_data[1:]
 
-# Loop principal solo si no hay alerta
-if not alerta_activada:
-    for _ in range(300):  # Cambiar a 3600 para simular una hora entera
-        tiempo, prob = generar_dato()
-        x_data.append(tiempo)
-        y_data.append(prob)
+    # LIMPIAR y GRAFICAR
+    ax.clear()
+    ax.plot(x_data, y_data, label="Probabilidad de Falla", color="navy")
+    ax.axhline(y=umbral, color="red", linestyle="--", label="Umbral (0.90)")
 
-        if prob > 0.9:
-            st.session_state.alerta_activada = True
-            st.error("⚠️ ALERTA: CHEQUEAR SISTEMA", icon="🚨")
-            break
+    ax.set_title("Probabilidad Estimada de Falla (en tiempo real)")
+    ax.set_xlabel("Tiempo")
+    ax.set_ylabel("Probabilidad de Falla")
+    ax.legend(loc="upper left")
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M:%S"))
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    grafico.pyplot(fig)
 
-        fig, ax = plt.subplots(figsize=(14, 6))
-        ax.plot(
-            x_data, y_data, label="Probabilidad de Falla", color="blue", linewidth=2
-        )
-        ax.axhline(
-            y=0.9,
-            color="red",
-            linestyle="--",
-            linewidth=1.5,
-            label="Umbral crítico (0.9)",
-        )
-        ax.set_ylabel("Probabilidad", fontsize=12)
-        ax.set_xlabel("Tiempo", fontsize=12)
-        ax.set_title("Probabilidad de Falla a Futuro (Próximos 5 minutos)", fontsize=14)
-        ax.set_ylim([0, 1.05])
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M:%S"))
-        ax.legend()
-        ax.grid(True)
+    # DETECTAR ALERTA
+    if prob >= umbral:
+        if tiempo not in alertas:
+            st.error(
+                f"🚨 Posible falla detectada a las {tiempo.time()} con probabilidad {prob:.2f}"
+            )
+            alertas.append(tiempo)
 
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-
-        grafico.pyplot(fig)
-        time.sleep(1)
+    time.sleep(pausa)
